@@ -9,7 +9,7 @@ This project is a real-time human pose detection web app using the PoseNet model
 - 📸 Real-time pose detection using your webcam
 - 🔴 Keypoints (e.g. nose, eyes, shoulders) are visualized as red dots
 - ⚪ Skeleton is drawn connecting major joints
-- 😎 Shahrukh Khan face image is placed dynamically over your nose
+- 😎 SeokJin (BTS Member)  face image is placed dynamically over your nose
 - 🚬 A smoke image appears just below the nose for a fun effect
 
 ---
