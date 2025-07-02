@@ -1,18 +1,18 @@
-# 👤 PoseNet AR Filter with ml5.js and p5.js
+# Pose Detection with PoseNet (ml5.js + p5.js)
 
-This project is a real-time human pose detection web app using the PoseNet model from ml5.js and visual rendering via p5.js. The app uses webcam input to detect body keypoints and overlays fun AR-style assets (e.g., Shahrukh Khan face and smoke effect) on the user's nose.
+This project uses PoseNet via the ml5.js library to detect human poses in real-time from a webcam feed and overlays visual effects (actor image + smoke) at specific keypoints (e.g., nose). It’s built using p5.js for rendering.
 
----
+## 🔴 Live Demo
 
-## 🎯 Features
+👉 [Click here to view the live demo](https://MeenakshiSinha23.github.io/Pose-Detection/)
 
-- 📸 Real-time pose detection using your webcam
-- 🔴 Keypoints (e.g. nose, eyes, shoulders) are visualized as red dots
-- ⚪ Skeleton is drawn connecting major joints
-- 😎 SeokJin (BTS Member)  face image is placed dynamically over your nose
-- 🚬 A smoke image appears just below the nose for a fun effect
+⚠️ Make sure to allow webcam access in your browser.
 
----
+## 🛠️ Technologies Used
 
-## 📁 Folder Structure
+- [ml5.js](https://ml5js.org/) – for PoseNet
+- [p5.js](https://p5js.org/) – for canvas rendering
+- HTML, JavaScript, CSS
+
+## 📂 Folder Structure
 
