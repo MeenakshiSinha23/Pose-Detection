@@ -1,53 +1,530 @@
-let capture;
-let posenet;
-let singlePose, skeleton;
-let actor_img, smoke;
 
-function setup() {
-  createCanvas(800, 500);
-  capture = createCapture(VIDEO);
-  capture.size(800, 500);
-  capture.hide();
+        // Global variables
+        let capture;
+        let poseNet;
+        let poses = [];
+        let isTraining = false;
+        let currentPose = '';
+        let poseCount = 0;
+        let lastAnalysisTime = 0;
+        let analysisInterval = 3000;
+        let apiKey = '';
+        let isAnalyzing = false;
+        let modelLoaded = false;
+        let gridLines = [];
+        let techParticles = [];
+        let librariesLoaded = false;
+        let videoReady = false;
 
-  posenet = ml5.poseNet(capture, modelLoaded);
-  posenet.on('pose', receivedPoses);
+        // Pose instructions
+        const poseInstructions = {
+            mountain: "Stand tall with feet hip-width apart, arms at your sides. Engage your core, lengthen your spine, and breathe deeply.",
+            warrior1: "Step one foot back 3-4 feet, front knee bent 90°, back leg straight. Raise arms overhead, square hips forward.",
+            warrior2: "From Warrior I, open hips and torso to side. Extend arms parallel to floor, gaze over front hand.",
+            downward_dog: "From hands and knees, tuck toes under and lift hips up. Create inverted V-shape, straight arms and legs.",
+            tree: "Stand on one leg, place other foot on inner thigh or calf (not knee). Hands in prayer position or overhead.",
+            triangle: "Stand wide, turn one foot out 90°. Reach over leg, place hand on shin/ankle. Extend other arm up.",
+            plank: "From push-up position, hold body in straight line from head to heels. Engage core, neutral spine.",
+            child: "Kneel, sit back on heels, fold forward with arms extended or by sides. Forehead touches ground."
+        };
 
-  actor_img = loadImage('images/jin1.png');
-  smoke = loadImage('images/jin.png');
-}
+        // Library loading check with fallback
+        function checkLibraries() {
+            console.log('Checking libraries...');
+            
+            if (typeof p5 === 'undefined') {
+                console.error('p5.js not loaded, trying fallback...');
+                loadP5Fallback();
+                return false;
+            }
+            
+            if (typeof ml5 === 'undefined') {
+                console.error('ml5.js not loaded, trying fallback...');
+                loadML5Fallback();
+                return false;
+            }
+            
+            console.log('All libraries loaded successfully');
+            librariesLoaded = true;
+            updateFeedback('✅ Libraries loaded successfully!');
+            return true;
+        }
 
-function receivedPoses(poses) {
-  if (poses.length > 0) {
-    singlePose = poses[0].pose;
-    skeleton = poses[0].skeleton;
-  }
-}
+        function loadP5Fallback() {
+            updateFeedback('⚠️ p5.js failed to load, trying backup source...');
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/p5@1.2.0/lib/p5.min.js';
+            script.onload = function() {
+                console.log('p5.js loaded from fallback');
+                updateFeedback('✅ p5.js loaded from backup source!');
+                checkLibraries();
+            };
+            script.onerror = function() {
+                updateFeedback('❌ Failed to load p5.js from all sources. Please check your internet connection.');
+            };
+            document.head.appendChild(script);
+        }
 
-function modelLoaded() {
-  console.log('PoseNet ready');
-}
+        function loadML5Fallback() {
+            updateFeedback('⚠️ ML5 failed to load, trying backup source...');
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/ml5@0.12.2/dist/ml5.min.js';
+            script.onload = function() {
+                console.log('ml5.js loaded from fallback');
+                updateFeedback('✅ ML5 loaded from backup source!');
+                checkLibraries();
+            };
+            script.onerror = function() {
+                updateFeedback('❌ Failed to load ML5 from all sources. Please check your internet connection.');
+            };
+            document.head.appendChild(script);
+        }
 
-function draw() {
-  background(0);
-  image(capture, 0, 0, 800, 500);
+        // Setup function
+        function setup() {
+            console.log('Setting up canvas and video...');
+            
+            // Hide loading status
+            document.getElementById('loadingStatus').style.display = 'none';
+            
+            const canvas = createCanvas(800, 500);
+            canvas.parent('canvas-container');
+            
+            // Initialize video capture
+            try {
+                capture = createCapture(VIDEO);
+                capture.size(800, 500);
+                capture.hide();
+                
+                console.log('Video capture initialized');
+                
+                // Initialize tech particles
+                initTechParticles();
+                
+                // Setup event listeners
+                setupEventListeners();
+                
+                // Wait for video to be ready
+                capture.elt.addEventListener('loadedmetadata', function() {
+                    console.log('Video metadata loaded');
+                    videoReady = true;
+                    updateStatus('Video ready. Initializing pose detection...');
+                    setTimeout(initializePoseNet, 1000);
+                });
+                
+            } catch (error) {
+                console.error('Error setting up video capture:', error);
+                updateStatus('Error: Failed to access camera');
+                updateFeedback('❌ Camera access failed. Please allow camera permissions and refresh.');
+            }
+        }
 
-  if (singlePose) {
-    fill(255, 0, 0);
-    for (let i = 0; i < singlePose.keypoints.length; i++) {
-      ellipse(singlePose.keypoints[i].position.x, singlePose.keypoints[i].position.y, 8);
-    }
+        function initializePoseNet() {
+            if (!videoReady) {
+                console.log('Video not ready, retrying in 500ms...');
+                setTimeout(initializePoseNet, 500);
+                return;
+            }
+            
+            try {
+                console.log('Initializing PoseNet...');
+                updateStatus('Loading pose detection model...');
+                
+                const options = {
+                    architecture: 'MobileNetV1',
+                    imageScaleFactor: 0.3,
+                    outputStride: 16,
+                    flipHorizontal: false,
+                    minConfidence: 0.5,
+                    maxPoseDetections: 1,
+                    scoreThreshold: 0.5,
+                    nmsRadius: 20,
+                    detectionType: 'single',
+                    inputResolution: 513,
+                    multiplier: 0.75,
+                    quantBytes: 2
+                };
+                
+                poseNet = ml5.poseNet(capture, options, modelReady);
+                poseNet.on('pose', gotPoses);
+                
+                console.log('PoseNet initialization started');
+                
+            } catch (error) {
+                console.error('Error initializing PoseNet:', error);
+                updateStatus('Error: Failed to initialize pose detection');
+                updateFeedback('❌ PoseNet initialization failed: ' + error.message);
+                
+                // Retry after 3 seconds
+                setTimeout(initializePoseNet, 3000);
+            }
+        }
 
-    stroke(255);
-    strokeWeight(2);
-    for (let j = 0; j < skeleton.length; j++) {
-      line(
-        skeleton[j][0].position.x, skeleton[j][0].position.y,
-        skeleton[j][1].position.x, skeleton[j][1].position.y
-      );
-    }
+        function modelReady() {
+            modelLoaded = true;
+            console.log('PoseNet model loaded successfully');
+            updateStatus('✅ Ready! Select a pose to begin training.');
+            updateFeedback('🎯 PoseNet model loaded successfully! You can now start training.');
+        }
 
-    // Overlay actor image and smoke
-    image(actor_img, singlePose.nose.x - 25, singlePose.nose.y - 50, 50, 50);
-    image(smoke, singlePose.nose.x - 10, singlePose.nose.y + 20, 30, 30);
-  }
-}
+        function gotPoses(results) {
+            poses = results;
+        }
+
+        function initTechParticles() {
+            techParticles = [];
+            for (let i = 0; i < 20; i++) {
+                techParticles.push({
+                    x: random(width),
+                    y: random(height),
+                    size: random(2, 6),
+                    speed: random(0.5, 2),
+                    alpha: random(50, 150)
+                });
+            }
+        }
+
+        function setupEventListeners() {
+            document.getElementById('startBtn').addEventListener('click', startTraining);
+            document.getElementById('stopBtn').addEventListener('click', stopTraining);
+            document.getElementById('resetBtn').addEventListener('click', resetCount);
+            document.getElementById('poseSelect').addEventListener('change', selectPose);
+        }
+
+        function draw() {
+            // Dark background
+            background(10, 10, 15);
+            
+            // Draw video feed
+            if (capture && videoReady) {
+                push();
+                translate(width, 0);
+                scale(-1, 1);
+                tint(255, 180);
+                image(capture, 0, 0, width, height);
+                pop();
+            }
+            
+            // Draw tech grid overlay
+            drawTechGrid();
+            
+            // Draw floating particles
+            drawTechParticles();
+            
+            // Draw pose if detected
+            if (poses.length > 0 && modelLoaded) {
+                const pose = poses[0];
+                
+                // Draw skeleton with tech style
+                drawTechSkeleton(pose);
+                
+                // Draw keypoints with blue dots
+                drawTechKeypoints(pose);
+                
+                // Draw pose info
+                if (isTraining && currentPose) {
+                    drawPoseInfo();
+                }
+                
+                // Analyze pose if training
+                if (isTraining && currentPose && !isAnalyzing) {
+                    const currentTime = Date.now();
+                    if (currentTime - lastAnalysisTime > analysisInterval) {
+                        analyzePose(pose);
+                        lastAnalysisTime = currentTime;
+                    }
+                }
+            }
+            
+            // Draw HUD elements
+            drawHUD();
+        }
+
+        function drawTechGrid() {
+            stroke(0, 255, 0, 30);
+            strokeWeight(1);
+            
+            // Vertical lines
+            for (let x = 0; x < width; x += 50) {
+                line(x, 0, x, height);
+            }
+            
+            // Horizontal lines
+            for (let y = 0; y < height; y += 50) {
+                line(0, y, width, y);
+            }
+        }
+
+        function drawTechParticles() {
+            for (let particle of techParticles) {
+                fill(0, 150, 255, particle.alpha);
+                noStroke();
+                ellipse(particle.x, particle.y, particle.size);
+                
+                // Move particle
+                particle.y -= particle.speed;
+                particle.alpha -= 0.5;
+                
+                // Reset particle
+                if (particle.y < 0 || particle.alpha <= 0) {
+                    particle.x = random(width);
+                    particle.y = height;
+                    particle.alpha = random(50, 150);
+                }
+            }
+        }
+
+        function drawTechSkeleton(pose) {
+            strokeWeight(3);
+            for (let j = 0; j < pose.skeleton.length; j++) {
+                let partA = pose.skeleton[j][0];
+                let partB = pose.skeleton[j][1];
+                
+                if (partA.score > 0.5 && partB.score > 0.5) {
+                    stroke(255, 255, 255, 200);
+                    line(width - partA.position.x, partA.position.y, 
+                         width - partB.position.x, partB.position.y);
+                }
+            }
+        }
+
+        function drawTechKeypoints(pose) {
+            for (let j = 0; j < pose.pose.keypoints.length; j++) {
+                let keypoint = pose.pose.keypoints[j];
+                if (keypoint.score > 0.5) {
+                    // Blue glowing dots
+                    fill(0, 150, 255, 200);
+                    noStroke();
+                    ellipse(width - keypoint.position.x, keypoint.position.y, 12);
+                    
+                    // Inner bright core
+                    fill(100, 200, 255, 255);
+                    ellipse(width - keypoint.position.x, keypoint.position.y, 6);
+                }
+            }
+        }
+
+        function drawPoseInfo() {
+            fill(0, 255, 0);
+            textSize(16);
+            textAlign(LEFT);
+            text(`Training: ${getPoseName(currentPose)}`, 10, 30);
+            
+            if (isAnalyzing) {
+                fill(255, 255, 0);
+                text('Analyzing...', 10, 50);
+            }
+        }
+
+        function drawHUD() {
+            // Corner indicators
+            stroke(0, 255, 0);
+            strokeWeight(2);
+            noFill();
+            
+            // Top-left corner
+            line(10, 10, 30, 10);
+            line(10, 10, 10, 30);
+            
+            // Top-right corner
+            line(width - 30, 10, width - 10, 10);
+            line(width - 10, 10, width - 10, 30);
+            
+            // Bottom-left corner
+            line(10, height - 30, 10, height - 10);
+            line(10, height - 10, 30, height - 10);
+            
+            // Bottom-right corner
+            line(width - 30, height - 10, width - 10, height - 10);
+            line(width - 10, height - 30, width - 10, height - 10);
+        }
+
+        function startTraining() {
+            apiKey = document.getElementById('apiKey').value.trim();
+            if (!apiKey) {
+                alert('Please enter your OpenAI API key');
+                return;
+            }
+
+            if (!currentPose) {
+                alert('Please select a pose to practice');
+                return;
+            }
+
+            if (!modelLoaded) {
+                alert('Please wait for the pose detection model to load');
+                return;
+            }
+
+            isTraining = true;
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            updateStatus('Training started! Get into position...', 'analyzing');
+            updateFeedback('🎯 Training started! Position yourself for the pose and hold steady.');
+        }
+
+        function stopTraining() {
+            isTraining = false;
+            isAnalyzing = false;
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            updateStatus('Training stopped');
+            updateFeedback('🛑 Training session ended. Great work!');
+        }
+
+        function resetCount() {
+            poseCount = 0;
+            document.getElementById('poseCount').textContent = poseCount;
+            updateFeedback('🔄 Pose count reset. Keep practicing!');
+        }
+
+        function selectPose() {
+            const select = document.getElementById('poseSelect');
+            currentPose = select.value;
+            
+            if (currentPose) {
+                document.getElementById('poseInstructions').textContent = poseInstructions[currentPose];
+                updateStatus(`Selected: ${getPoseName(currentPose)}`);
+                updateFeedback(`🧘 Ready to practice ${getPoseName(currentPose)}. Click Start Training when ready!`);
+            } else {
+                document.getElementById('poseInstructions').textContent = 'Select a pose from the dropdown to see instructions.';
+                updateStatus('Select a pose to begin');
+            }
+        }
+
+        function getPoseName(poseKey) {
+            const poseNames = {
+                mountain: 'Mountain Pose',
+                warrior1: 'Warrior I',
+                warrior2: 'Warrior II',
+                downward_dog: 'Downward Dog',
+                tree: 'Tree Pose',
+                triangle: 'Triangle Pose',
+                plank: 'Plank Pose',
+                child: "Child's Pose"
+            };
+            return poseNames[poseKey] || poseKey;
+        }
+
+        function updateStatus(message, type = '') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+
+        function updateFeedback(message) {
+            const feedbackEl = document.getElementById('feedbackContent');
+            const timestamp = new Date().toLocaleTimeString();
+            feedbackEl.innerHTML = `<div><strong>[${timestamp}]</strong> ${message}</div>` + feedbackEl.innerHTML;
+        }
+
+        async function analyzePose(pose) {
+            if (!pose || isAnalyzing) return;
+            
+            isAnalyzing = true;
+            updateStatus('Analyzing pose...', 'analyzing');
+
+            try {
+                // Create canvas for image capture
+                const canvas = document.createElement('canvas');
+                canvas.width = 800;
+                canvas.height = 500;
+                const ctx = canvas.getContext('2d');
+                
+                // Draw flipped video frame
+                ctx.save();
+                ctx.scale(-1, 1);
+                ctx.translate(-800, 0);
+                ctx.drawImage(capture.elt, 0, 0, 800, 500);
+                ctx.restore();
+                
+                const imageData = canvas.toDataURL('image/jpeg', 0.8);
+                
+                // OpenAI API call
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-4o',
+                        messages: [
+                            {
+                                role: 'user',
+                                content: [
+                                    {
+                                        type: 'text',
+                                        text: `Analyze this ${getPoseName(currentPose)} pose. Instructions: ${poseInstructions[currentPose]}
+
+Rate 1-10 and provide brief feedback. Format:
+CORRECT: [YES/NO]
+RATING: [1-10]
+FEEDBACK: [Brief corrections/encouragement]`
+                                    },
+                                    {
+                                        type: 'image_url',
+                                        image_url: { url: imageData }
+                                    }
+                                ]
+                            }
+                        ],
+                        max_tokens: 200
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const feedback = result.choices[0].message.content;
+                
+                // Parse feedback
+                const isCorrect = feedback.includes('CORRECT: YES');
+                const ratingMatch = feedback.match(/RATING: (\d+)/);
+                const rating = ratingMatch ? parseInt(ratingMatch[1]) : 0;
+                const feedbackText = feedback.split('FEEDBACK: ')[1] || feedback;
+
+                // Update UI
+                if (isCorrect && rating >= 7) {
+                    poseCount++;
+                    document.getElementById('poseCount').textContent = poseCount;
+                    updateStatus('Excellent pose! ✓', 'correct');
+                } else {
+                    updateStatus('Need improvement', 'incorrect');
+                }
+
+                updateFeedback(`${isCorrect ? '✅' : '❌'} Rating: ${rating}/10 - ${feedbackText}`);
+
+            } catch (error) {
+                console.error('Analysis error:', error);
+                updateStatus('Analysis error', 'incorrect');
+                updateFeedback(`❌ Error: ${error.message}`);
+            } finally {
+                isAnalyzing = false;
+            }
+        }
+
+        // Initialize everything once DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, checking libraries...');
+            
+            // Check if libraries are loaded
+            const checkInterval = setInterval(function() {
+                if (checkLibraries()) {
+                    clearInterval(checkInterval);
+                    updateStatus('Libraries loaded. Camera access required.');
+                    updateFeedback('🚀 Ready to initialize! Please allow camera access when prompted.');
+                }
+            }, 100);
+            
+            // Timeout after 10 seconds
+            setTimeout(function() {
+                if (!librariesLoaded) {
+                    clearInterval(checkInterval);
+                    updateStatus('Error: Libraries failed to load');
+                    updateFeedback('❌ Failed to load required libraries. Please refresh the page.');
+                }
+            }, 10000);
+        });
