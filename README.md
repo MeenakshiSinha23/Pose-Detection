@@ -1,51 +1,51 @@
-# Pose Detection with PoseNet (ml5.js + p5.js)
 
-This project uses PoseNet via the ml5.js library to detect human poses in real-time from a webcam feed and overlays visual effects (actor image and smoke) at specific keypoints like the nose. It is built using p5.js for rendering and animation.
+# 🎯 Pose Detection with PoseNet (ml5.js + p5.js)
 
-Live Demo
+This project demonstrates real-time human pose detection using PoseNet via the [ml5.js](https://ml5js.org/) library. It leverages [p5.js](https://p5js.org/) to overlay dynamic visual effects—an actor image and smoke—on keypoints such as the nose, providing an interactive and creative augmented experience through your webcam.
 
-You can view the live demo at: https://MeenakshiSinha23.github.io/Pose-Detection/
-Make sure to allow webcam access in your browser.
+---
 
-Technologies Used
+## 🔗 Live Demo
 
-ml5.js for pose detection using PoseNet
+👉 [Click here to try the live demo](https://MeenakshiSinha23.github.io/Pose-Detection/)
+**Note:** Allow webcam access in your browser for the demo to function.
 
-p5.js for drawing on canvas and rendering
+---
 
-HTML, CSS, and JavaScript for building the web interface
+## 🛠️ Technologies Used
 
-Features
+* **ml5.js** – For real-time pose estimation using PoseNet
+* **p5.js** – For canvas rendering and visual overlays
+* **HTML, CSS, JavaScript** – For structuring and styling the web interface
 
-Detects human pose in real-time using webcam feed
+---
 
-Tracks the position of the nose
+## ✨ Features
 
-Overlays actor and smoke images dynamically on the nose keypoint
+* 🎥 Real-time pose detection via webcam
+* 👃 Tracks nose keypoint dynamically
+* 🖼️ Overlays custom images (actor & smoke) on detected pose
+* 🔁 Interactive, animated experience using PoseNet and p5.js
 
-Interactive and responsive experience
+---
 
-Project Structure
+## 🚀 How to Run Locally
 
-The project contains the following files:
+1. **Clone** or **download** this repository.
+2. Open `index.html` directly in a browser.
+3. Allow webcam access when prompted.
 
-index.html
+> ✅ **Tip:** For consistent webcam access and functionality, it's best to run the project using a local server (e.g., with VSCode Live Server or Python's HTTP server).
 
-sketch.js
+---
 
-style.css
+## 🧠 How It Works
 
-images folder containing actor.png and smoke.png
+1. The webcam stream is captured using p5.js.
+2. ml5.js loads the PoseNet model and detects human keypoints in real-time.
+3. The `nose` keypoint is extracted from the prediction results.
+4. Images (`actor.png` and `smoke.png`) are drawn at the nose position on the canvas to create an augmented effect.
 
-How to Run Locally
 
-Clone or download the repository.
 
-Open the index.html file in a browser.
 
-Allow access to the webcam when prompted.
-Note: For proper webcam access, it's recommended to run the project on a local server.
-
-How It Works
-
-The webcam feed is passed to the PoseNet model using ml5.js. PoseNet detects the human pose and provides keypoints such as the nose. p5.js is used to render the canvas and draw the actor and smoke images on top of the nose keypoint in real-time.
